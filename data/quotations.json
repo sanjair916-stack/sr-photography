@@ -1,0 +1,141 @@
+[
+  {
+    "id": "SRP-2026-0001",
+    "createdAt": "2026-11-01T10:30:00.000Z",
+    "updatedAt": "2026-11-01T10:30:00.000Z",
+    "customer": {
+      "name": "Aditya & Sneha Verma",
+      "mobile": "+91 98402 11223",
+      "whatsapp": "+91 98402 11223",
+      "email": "aditya.verma@gmail.com",
+      "eventDate": "2026-12-14",
+      "eventLocation": "Leela Palace Grand Ballroom, Chennai",
+      "eventType": "Wedding Ceremony"
+    },
+    "services": [
+      {
+        "id": "srv-wedding-photo",
+        "name": "Wedding Photography",
+        "price": 35000
+      },
+      {
+        "id": "srv-candid-photo",
+        "name": "Candid Photography",
+        "price": 25000
+      },
+      {
+        "id": "srv-cinematic",
+        "name": "Cinematic Video",
+        "price": 30000
+      },
+      {
+        "id": "srv-drone",
+        "name": "Drone Photography",
+        "price": 15000
+      },
+      {
+        "id": "srv-album",
+        "name": "Album Design & 40-Page Photobook",
+        "price": 12000
+      }
+    ],
+    "financials": {
+      "subtotal": 117000,
+      "discountType": "percentage",
+      "discountValue": 10,
+      "discountAmount": 11700,
+      "finalTotal": 105300,
+      "advancePaid": 50000,
+      "remainingBalance": 55300
+    },
+    "status": "Confirmed Booking",
+    "paymentStatus": "Partially Paid",
+    "notes": "Bride requested golden hour pre-wedding couple portraits on beach lawn before sunset."
+  },
+  {
+    "id": "SRP-2026-0002",
+    "createdAt": "2026-11-04T14:15:00.000Z",
+    "updatedAt": "2026-11-04T14:15:00.000Z",
+    "customer": {
+      "name": "Dr. Rajesh & Pooja Menon",
+      "mobile": "+91 98840 99881",
+      "whatsapp": "+91 98840 99881",
+      "email": "dr.menon.cardio@gmail.com",
+      "eventDate": "2026-11-28",
+      "eventLocation": "Taj Fisherman’s Cove Resort, ECR",
+      "eventType": "Engagement & Ring Ceremony"
+    },
+    "services": [
+      {
+        "id": "srv-engagement",
+        "name": "Engagement Photography",
+        "price": 15000
+      },
+      {
+        "id": "srv-candid-photo",
+        "name": "Candid Photography",
+        "price": 25000
+      },
+      {
+        "id": "srv-drone",
+        "name": "Drone Photography",
+        "price": 15000
+      }
+    ],
+    "financials": {
+      "subtotal": 55000,
+      "discountType": "rupees",
+      "discountValue": 5000,
+      "discountAmount": 5000,
+      "finalTotal": 50000,
+      "advancePaid": 25000,
+      "remainingBalance": 25000
+    },
+    "status": "Quotation",
+    "paymentStatus": "Partially Paid",
+    "notes": "Quotation delivered via WhatsApp. Client reviewing package inclusions."
+  },
+  {
+    "id": "SRP-2026-0003",
+    "createdAt": "2026-11-06T09:00:00.000Z",
+    "updatedAt": "2026-11-06T09:00:00.000Z",
+    "customer": {
+      "name": "Kavitha & Arvind Raman",
+      "mobile": "+91 97910 44556",
+      "whatsapp": "+91 97910 44556",
+      "email": "kavitha.raman@outlook.com",
+      "eventDate": "2026-10-20",
+      "eventLocation": "ITC Grand Chola Banquet, Chennai",
+      "eventType": "Reception & Sangeet"
+    },
+    "services": [
+      {
+        "id": "srv-reception",
+        "name": "Reception Photography",
+        "price": 20000
+      },
+      {
+        "id": "srv-trad-photo",
+        "name": "Traditional Photography",
+        "price": 18000
+      },
+      {
+        "id": "srv-album",
+        "name": "Album Design & 40-Page Photobook",
+        "price": 12000
+      }
+    ],
+    "financials": {
+      "subtotal": 50000,
+      "discountType": "rupees",
+      "discountValue": 0,
+      "discountAmount": 0,
+      "finalTotal": 50000,
+      "advancePaid": 50000,
+      "remainingBalance": 0
+    },
+    "status": "Completed",
+    "paymentStatus": "Fully Paid",
+    "notes": "Event successfully concluded. Both albums and master pendrive delivered."
+  }
+]

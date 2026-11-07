@@ -1,0 +1,6 @@
+{
+  "name": "SR PHOTOGRAPHY – Premium Quotation Management",
+  "description": "Executive quotation management, A4 PDF generator, booking tracking, and automated calculation portal for SR PHOTOGRAPHY.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,92 @@
+{
+  "businessName": "SR PHOTOGRAPHY",
+  "tagline": "Timeless Luxury Wedding & Lifestyle Visuals",
+  "phone": "+91 98401 23456",
+  "whatsapp": "+91 98401 23456",
+  "email": "contact@srphotography.in",
+  "website": "www.srphotography.in",
+  "address": "Studio 4B, Grand Horizon Avenue, Near Central Park, Chennai, Tamil Nadu 600028",
+  "gstin": "33AABCS8891D1ZV",
+  "termsAndConditions": [
+    "A 50% advance payment is required to reserve the event date and block our photography crew.",
+    "40% payment is due on or before the date of the primary event.",
+    "Remaining 10% balance must be settled prior to the release of high-resolution digital master files and album printing.",
+    "Curated RAW preview photos will be uploaded to a secure cloud gallery within 3-5 working days.",
+    "Custom album design will be submitted for client review; print production takes 12-15 days after design approval.",
+    "Travel and crew lodging outside local studio territory to be arranged or reimbursed by the client."
+  ],
+  "logoDataUrl": "/assets/aistudio/SR_PHOTOGRAPHY_LOGO.jpg_ab1b3994.jpeg",
+  "signatureDataUrl": "/signature_transparent.png",
+  "defaultServices": [
+    {
+      "id": "srv-wedding-photo",
+      "name": "Wedding Photography",
+      "price": 35000
+    },
+    {
+      "id": "srv-wedding-video",
+      "name": "Wedding Videography",
+      "price": 40000
+    },
+    {
+      "id": "srv-candid-photo",
+      "name": "Candid Photography",
+      "price": 25000
+    },
+    {
+      "id": "srv-trad-photo",
+      "name": "Traditional Photography",
+      "price": 18000
+    },
+    {
+      "id": "srv-prewedding",
+      "name": "Pre-Wedding Shoot",
+      "price": 22000
+    },
+    {
+      "id": "srv-engagement",
+      "name": "Engagement Photography",
+      "price": 15000
+    },
+    {
+      "id": "srv-reception",
+      "name": "Reception Photography",
+      "price": 20000
+    },
+    {
+      "id": "srv-birthday",
+      "name": "Birthday Photography",
+      "price": 10000
+    },
+    {
+      "id": "srv-baby",
+      "name": "Baby Photography",
+      "price": 12000
+    },
+    {
+      "id": "srv-maternity",
+      "name": "Maternity Photography",
+      "price": 15000
+    },
+    {
+      "id": "srv-outdoor",
+      "name": "Outdoor Photography",
+      "price": 18000
+    },
+    {
+      "id": "srv-drone",
+      "name": "Drone Photography",
+      "price": 15000
+    },
+    {
+      "id": "srv-cinematic",
+      "name": "Cinematic Video",
+      "price": 30000
+    },
+    {
+      "id": "srv-album",
+      "name": "Album Design & 40-Page Photobook",
+      "price": 12000
+    }
+  ]
+}
