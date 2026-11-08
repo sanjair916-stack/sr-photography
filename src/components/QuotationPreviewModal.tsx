@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { 
   X, 
   Download, 
@@ -23,22 +23,38 @@ interface QuotationPreviewModalProps {
   studioProfile: StudioProfile;
   isOpen: boolean;
   onClose: () => void;
+  initialExportAction?: 'jpg' | 'pdf' | null;
 }
 
 export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
   quotation,
   studioProfile,
   isOpen,
-  onClose
+  onClose,
+  initialExportAction = null
 }) => {
   const [scale, setScale] = useState(0.85);
   const [isExporting, setIsExporting] = useState(false);
   const [exportType, setExportType] = useState<'pdf' | 'jpg' | null>(null);
   const [exportStatus, setExportStatus] = useState('');
-  const [exportedJpgUrl, setExportedJpgUrl] = useState<string | null>(null);
+  const [exportedJpg, setExportedJpg] = useState<{
+    dataUrl: string;
+    serverUrl?: string;
+    filename: string;
+  } | null>(null);
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const printContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-trigger JPG generation if modal was opened via "Download JPG"
+  useEffect(() => {
+    if (isOpen && quotation && initialExportAction === 'jpg') {
+      const timer = setTimeout(() => {
+        handleDownloadJpg();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, quotation?.id, initialExportAction]);
 
   if (!isOpen || !quotation) return null;
 
@@ -55,81 +71,137 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
   // Canvas PDF Generator
   const handleDownloadPdf = async () => {
     setModalError(null);
-    const el = document.getElementById('preview-a4-sheet');
+    const el = document.getElementById('preview-a4-sheet') || 
+               document.querySelector('[data-quotation-sheet="true"]') as HTMLElement | null;
     if (!el) {
       setModalError('Quotation sheet element could not be found.');
       return;
     }
 
+    const container = printContainerRef.current;
+    const prevTransform = container?.style.transform;
+    const prevTransition = container?.style.transition;
+    if (container) {
+      container.style.transform = 'none';
+      container.style.transition = 'none';
+    }
+
     try {
       setIsExporting(true);
       setExportType('pdf');
+      await new Promise((r) => requestAnimationFrame(r));
+
       await generateAndDownloadPdf({
         element: el,
         quotationId: quotation.id,
         customerName: quotation.customer.name,
         onProgress: (status) => setExportStatus(status)
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setModalError('Automatic PDF download blocked. Please use the "Save as PDF (Print)" button to print/save directly.');
+      setModalError(`PDF export encountered an issue: ${err?.message || 'Rendering error'}. Please use the "Save as PDF (Print)" button to print/save directly.`);
     } finally {
+      if (container) {
+        container.style.transform = prevTransform || '';
+        container.style.transition = prevTransition || '';
+      }
       setIsExporting(false);
       setExportType(null);
       setExportStatus('');
     }
   };
 
-  // Canvas JPG Generator with On-Screen Modal Preview Fallback
+  // Canvas JPG Generator with Multi-Fallback Download & On-Screen Modal
   const handleDownloadJpg = async () => {
     setModalError(null);
-    const el = document.getElementById('preview-a4-sheet');
+    const el = document.getElementById('preview-a4-sheet') || 
+               document.querySelector('[data-quotation-sheet="true"]') as HTMLElement | null;
     if (!el) {
       setModalError('Quotation sheet element could not be found.');
       return;
     }
 
+    const container = printContainerRef.current;
+    const prevTransform = container?.style.transform;
+    const prevTransition = container?.style.transition;
+    if (container) {
+      container.style.transform = 'none';
+      container.style.transition = 'none';
+    }
+
     try {
       setIsExporting(true);
       setExportType('jpg');
+      setExportStatus('Rendering high-res JPG...');
+      await new Promise((r) => requestAnimationFrame(r));
       
-      // Generate blob & download
-      await generateAndDownloadJpg({
+      const result = await generateAndDownloadJpg({
         element: el,
         quotationId: quotation.id,
         customerName: quotation.customer.name,
         onProgress: (status) => setExportStatus(status)
       });
 
-      // Also grab data URL to display on screen so user can right-click/copy directly!
-      const canvasEl = document.querySelector('canvas');
-      if (canvasEl) {
-        setExportedJpgUrl(canvasEl.toDataURL('image/jpeg', 0.95));
+      if (result && result.dataUrl) {
+        setExportedJpg({
+          dataUrl: result.dataUrl,
+          serverUrl: result.serverUrl,
+          filename: result.filename
+        });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setModalError('JPG generation encountered an issue. You can use the "Save as PDF (Print)" option above.');
+      setModalError(`JPG generation encountered an issue: ${err?.message || 'Canvas rendering error'}. You can use the "Save as PDF (Print)" option above.`);
     } finally {
+      if (container) {
+        container.style.transform = prevTransform || '';
+        container.style.transition = prevTransition || '';
+      }
       setIsExporting(false);
       setExportType(null);
       setExportStatus('');
     }
   };
 
-  // Copy JPG image to clipboard
+  // Copy Image to clipboard with PNG transcoding (required by Chrome & Firefox)
   const handleCopyImageToClipboard = async () => {
-    if (!exportedJpgUrl) return;
+    if (!exportedJpg?.dataUrl) return;
     try {
-      const res = await fetch(exportedJpgUrl);
-      const blob = await res.blob();
-      await navigator.clipboard.write([
-        new ClipboardItem({ [blob.type]: blob })
-      ]);
-      setCopiedToClipboard(true);
-      setTimeout(() => setCopiedToClipboard(false), 3000);
+      const img = new Image();
+      if (!exportedJpg.dataUrl.startsWith('data:')) {
+        img.crossOrigin = 'anonymous';
+      }
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth || img.width;
+        c.height = img.naturalHeight || img.height;
+        const ctx = c.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0);
+        c.toBlob(async (pngBlob) => {
+          if (!pngBlob) {
+            setModalError('Could not process image for clipboard.');
+            return;
+          }
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({ 'image/png': pngBlob })
+            ]);
+            setCopiedToClipboard(true);
+            setTimeout(() => setCopiedToClipboard(false), 3000);
+          } catch (clipErr) {
+            console.warn('Clipboard write permission blocked:', clipErr);
+            setModalError('Clipboard permission blocked. Please right-click or long-press the image to save.');
+          }
+        }, 'image/png');
+      };
+      img.onerror = () => {
+        setModalError('Could not load image to copy.');
+      };
+      img.src = exportedJpg.dataUrl;
     } catch (err) {
       console.error(err);
-      setModalError('Could not copy to clipboard. Please right-click the image to save.');
+      setModalError('Could not copy image to clipboard.');
     }
   };
 
@@ -211,14 +283,13 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
             <button
               onClick={handleDownloadJpg}
               disabled={isExporting}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium rounded-lg border border-stone-700 transition-colors cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-lg transition-colors cursor-pointer disabled:opacity-50 shadow-sm"
               title="Generate and download A4 JPG image"
             >
-              <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden md:inline">
+              <ImageIcon className="w-3.5 h-3.5" />
+              <span>
                 {isExporting && exportType === 'jpg' ? exportStatus || 'Exporting JPG...' : 'Download JPG'}
               </span>
-              <span className="md:hidden">JPG</span>
             </button>
 
             {/* Canvas PDF Button */}
@@ -286,67 +357,103 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={handleDownloadJpg}
+              className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer underline"
+            >
+              Click here to Download JPG
+            </button>
+            <span className="text-stone-600">|</span>
+            <button
               onClick={handleBrowserPrint}
               className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer underline"
             >
-              Click here to Save as PDF
+              Save as PDF (Print)
             </button>
           </div>
         </div>
       </div>
 
-      {/* On-Screen JPG Export Modal Dialog */}
-      {exportedJpgUrl && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4 no-print">
-          <div className="bg-stone-900 border border-amber-500/50 rounded-2xl max-w-lg w-full p-6 shadow-2xl text-stone-100 space-y-4">
+      {/* High-Resolution JPG Ready Modal Dialog */}
+      {exportedJpg && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 no-print overflow-y-auto">
+          <div className="bg-stone-900 border border-amber-500/60 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl text-stone-100 space-y-4 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-stone-800">
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-brand font-bold text-white text-base">Quotation JPG Ready</h3>
+                <h3 className="font-brand font-bold text-white text-base">Quotation JPG Generated</h3>
               </div>
               <button
-                onClick={() => setExportedJpgUrl(null)}
-                className="text-stone-400 hover:text-white p-1 rounded"
+                onClick={() => setExportedJpg(null)}
+                className="text-stone-400 hover:text-white p-1 rounded-lg hover:bg-stone-800 transition-colors cursor-pointer"
+                title="Close"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <p className="text-xs text-stone-300 leading-relaxed">
-              Your high-resolution A4 JPG quotation has been prepared. If the automatic download did not initiate, you can download or copy it below:
+              Your high-resolution A4 JPG quotation is ready. You can download the image file, copy it to clipboard, or save directly:
             </p>
 
-            {/* Thumbnail Preview */}
-            <div className="max-h-64 overflow-y-auto border border-stone-800 rounded-lg p-2 bg-stone-950 flex justify-center">
+            {/* Thumbnail / Image Preview Container */}
+            <div className="max-h-72 overflow-y-auto border border-stone-800 rounded-xl p-3 bg-stone-950 flex flex-col items-center gap-2">
               <img
-                src={exportedJpgUrl}
-                alt="Quotation Preview"
-                className="w-48 h-auto shadow-md border border-stone-700 rounded select-all"
+                src={exportedJpg.dataUrl}
+                alt="SR Photography Quotation JPG"
+                className="w-full max-w-xs h-auto shadow-lg border border-stone-700/80 rounded-md select-all cursor-pointer"
+                title="Right-click or tap-and-hold to save image"
               />
+              <span className="text-[10px] text-amber-400/90 font-medium text-center">
+                👉 Right-click image above and choose "Save Image As..." (or tap & hold on phone)
+              </span>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+            {/* Action Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {/* Primary Direct Download */}
               <a
-                href={exportedJpgUrl}
-                download={`SR_Photography_Quotation_${quotation.id}.jpg`}
-                className="flex-1 py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 shadow-md"
+                href={exportedJpg.serverUrl || exportedJpg.dataUrl}
+                download={exportedJpg.filename}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  const a = document.createElement('a');
+                  a.href = exportedJpg.dataUrl;
+                  a.download = exportedJpg.filename;
+                  document.body.appendChild(a);
+                  a.click();
+                  setTimeout(() => {
+                    if (document.body.contains(a)) document.body.removeChild(a);
+                  }, 1000);
+                }}
+                className="py-2.5 px-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-stone-950 font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer text-center"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 shrink-0" />
                 <span>Download JPG File</span>
               </a>
 
+              {/* Copy Image Button */}
               <button
                 type="button"
                 onClick={handleCopyImageToClipboard}
-                className="py-2.5 px-4 bg-stone-800 hover:bg-stone-700 text-stone-200 font-semibold text-xs rounded-lg flex items-center justify-center gap-2 border border-stone-700 cursor-pointer"
+                className="py-2.5 px-3 bg-stone-800 hover:bg-stone-700 text-stone-200 font-semibold text-xs rounded-lg flex items-center justify-center gap-2 border border-stone-700 cursor-pointer transition-colors"
               >
-                <Copy className="w-4 h-4 text-amber-400" />
-                <span>{copiedToClipboard ? 'Copied to Clipboard!' : 'Copy Image'}</span>
+                <Copy className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>{copiedToClipboard ? 'Copied to Clipboard! ✓' : 'Copy Image'}</span>
               </button>
             </div>
 
-            <div className="text-[10px] text-stone-400 text-center">
-              Tip: You can also right-click or tap and hold the preview image above to save it directly.
+            <div className="flex items-center justify-between pt-2 border-t border-stone-800 text-[11px] text-stone-400">
+              <span>Need authentic PDF?</span>
+              <button
+                onClick={() => {
+                  setExportedJpg(null);
+                  handleBrowserPrint();
+                }}
+                className="text-amber-400 hover:text-amber-300 font-semibold underline cursor-pointer"
+              >
+                Save as PDF (Print)
+              </button>
             </div>
           </div>
         </div>

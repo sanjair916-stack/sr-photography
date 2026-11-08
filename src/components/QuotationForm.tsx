@@ -32,7 +32,7 @@ interface QuotationFormProps {
   initialQuotation?: Quotation | null;
   studioProfile: StudioProfile;
   onSaveSuccess: (saved: Quotation) => void;
-  onOpenPreview: (q: Quotation) => void;
+  onOpenPreview: (q: Quotation, action?: 'jpg' | 'pdf' | null) => void;
   onCancelEdit?: () => void;
   onSaveDefaultServices?: (services: PhotographyService[]) => Promise<void>;
 }
@@ -355,69 +355,28 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
 
   // Preview Handler
   const handlePreview = () => {
+    setFormError(null);
     const quote = getCurrentQuotationObject();
     if (!quote.id) {
       quote.id = 'SRP-PREVIEW';
     }
-    onOpenPreview(quote);
+    onOpenPreview(quote, null);
   };
 
-  // Direct Download PDF Handler
-  const handleDownloadPdf = async () => {
+  // Download PDF Handler
+  const handleDownloadPdf = () => {
     setFormError(null);
-    const el = document.getElementById('hidden-a4-sheet-generator');
-    if (!el) {
-      setFormError('Quotation sheet renderer is not ready. Please try opening Preview first.');
-      return;
-    }
-
-    const currentQuote = getCurrentQuotationObject();
-    const effectiveId = currentQuote.id || 'SRP-DRAFT';
-
-    try {
-      setIsDownloadingPdf(true);
-      await generateAndDownloadPdf({
-        element: el,
-        quotationId: effectiveId,
-        customerName: customerName || 'Customer',
-        onProgress: (msg) => setPdfStatus(msg)
-      });
-    } catch (err) {
-      console.error(err);
-      setFormError('Automatic PDF download blocked. Please click "Preview & Print (Save as PDF)" to save directly.');
-    } finally {
-      setIsDownloadingPdf(false);
-      setPdfStatus('');
-    }
+    const quote = getCurrentQuotationObject();
+    if (!quote.id) quote.id = 'SRP-DRAFT';
+    onOpenPreview(quote, 'pdf');
   };
 
-  // Direct Download JPG Handler
-  const handleDownloadJpg = async () => {
+  // Download JPG Handler - Opens preview modal and auto-triggers high-res JPG export
+  const handleDownloadJpg = () => {
     setFormError(null);
-    const el = document.getElementById('hidden-a4-sheet-generator');
-    if (!el) {
-      setFormError('Quotation sheet renderer is not ready. Please try opening Preview first.');
-      return;
-    }
-
-    const currentQuote = getCurrentQuotationObject();
-    const effectiveId = currentQuote.id || 'SRP-DRAFT';
-
-    try {
-      setIsDownloadingJpg(true);
-      await generateAndDownloadJpg({
-        element: el,
-        quotationId: effectiveId,
-        customerName: customerName || 'Customer',
-        onProgress: (msg) => setJpgStatus(msg)
-      });
-    } catch (err) {
-      console.error(err);
-      setFormError('Automatic JPG download encountered an issue. Please click "Preview & Print (Save as PDF)" to view and save.');
-    } finally {
-      setIsDownloadingJpg(false);
-      setJpgStatus('');
-    }
+    const quote = getCurrentQuotationObject();
+    if (!quote.id) quote.id = 'SRP-DRAFT';
+    onOpenPreview(quote, 'jpg');
   };
 
   // WhatsApp Share Handler
@@ -1034,23 +993,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
         </div>
       </div>
 
-      {/* Off-Screen A4 Sheet for direct PDF/JPG generation */}
-      <div 
-        style={{
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          zIndex: -99999,
-          pointerEvents: 'none',
-          opacity: 0.01
-        }}
-      >
-        <QuotationSheetA4
-          id="hidden-a4-sheet-generator"
-          quotation={getCurrentQuotationObject()}
-          studioProfile={studioProfile}
-        />
-      </div>
+
     </div>
   );
 };

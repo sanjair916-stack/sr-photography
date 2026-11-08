@@ -80,12 +80,44 @@ function writeAuth(auth: { username: string; password: string }) {
   fs.writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2), 'utf-8');
 }
 
+const DOWNLOADS_DIR = path.resolve(__dirname, 'public', 'downloads');
+if (!fs.existsSync(DOWNLOADS_DIR)) {
+  fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
+}
+
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '15mb' })); // Support base64 image logo uploads
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', '*');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+  app.use(express.json({ limit: '25mb' })); // Support high-res base64 image uploads
   app.use(express.static(path.resolve(__dirname, 'public')));
 
   // --- API Routes ---
+
+  // Save generated JPG/PDF for direct static file download & preview
+  app.post('/api/save-download', (req, res) => {
+    try {
+      const { dataUrl, filename } = req.body;
+      if (!dataUrl) {
+        return res.status(400).json({ error: 'No data provided' });
+      }
+      const safeFilename = (filename || 'SR_Photography_Quotation.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const base64Data = dataUrl.replace(/^data:[^;]+;base64,/, '');
+      const filePath = path.join(DOWNLOADS_DIR, safeFilename);
+      fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+      res.json({ success: true, url: `/downloads/${safeFilename}`, filename: safeFilename });
+    } catch (err) {
+      console.error('Error saving download file:', err);
+      res.status(500).json({ error: 'Failed to save download file' });
+    }
+  });
 
   // Auth: Login
   app.post('/api/auth/login', (req, res) => {

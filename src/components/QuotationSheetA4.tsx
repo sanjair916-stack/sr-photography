@@ -19,6 +19,7 @@ export const QuotationSheetA4: React.FC<QuotationSheetA4Props> = ({
   return (
     <div
       id={id}
+      data-quotation-sheet="true"
       className="bg-white text-stone-900 mx-auto relative select-none"
       style={{
         width: '794px',
@@ -232,7 +233,7 @@ export const QuotationSheetA4: React.FC<QuotationSheetA4Props> = ({
               <img
                 src={studioProfile.signatureDataUrl}
                 alt="Authorized Signatory"
-                crossOrigin="anonymous"
+                crossOrigin={studioProfile.signatureDataUrl.startsWith('data:') ? undefined : 'anonymous'}
                 className="h-14 w-auto max-w-[170px] object-contain select-none pointer-events-none mb-0.5"
               />
             ) : (

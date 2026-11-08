@@ -9,8 +9,6 @@ import { QuotationForm } from './components/QuotationForm';
 import { QuotationHistoryView } from './components/QuotationHistoryView';
 import { StudioSettingsView } from './components/StudioSettingsView';
 import { QuotationPreviewModal } from './components/QuotationPreviewModal';
-import { QuotationSheetA4 } from './components/QuotationSheetA4';
-import { generateAndDownloadPdf, generateAndDownloadJpg } from './utils/pdfGenerator';
 import { generateWhatsAppMessage, getWhatsAppUrl } from './utils/formatters';
 
 export default function App() {
@@ -35,9 +33,7 @@ export default function App() {
   // A4 Preview Modal State
   const [previewQuotation, setPreviewQuotation] = useState<Quotation | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-
-  // Background Direct PDF Export State
-  const [exportTargetQuote, setExportTargetQuote] = useState<Quotation | null>(null);
+  const [previewInitialAction, setPreviewInitialAction] = useState<'jpg' | 'pdf' | null>(null);
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -100,87 +96,21 @@ export default function App() {
   };
 
   // Preview Handlers
-  const handlePreviewQuotation = (q: Quotation) => {
+  const handlePreviewQuotation = (q: Quotation, action: 'jpg' | 'pdf' | null = null) => {
     setPreviewQuotation(q);
+    setPreviewInitialAction(action);
     setIsPreviewOpen(true);
   };
 
-  // Direct Download PDF Handler
-  const handleDownloadPdf = async (q: Quotation) => {
-    try {
-      setExportTargetQuote(q);
-      showToast(`Preparing PDF for ${q.id}...`);
-
-      // Ensure React has committed and DOM has rendered
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
-      let el = document.getElementById('app-pdf-direct-export');
-      if (!el) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        el = document.getElementById('app-pdf-direct-export');
-      }
-
-      if (!el) {
-        showToast('Could not initialize export sheet. Opening Preview...');
-        setExportTargetQuote(null);
-        handlePreviewQuotation(q);
-        return;
-      }
-
-      showToast(`Rendering PDF for ${q.id}...`);
-      await generateAndDownloadPdf({
-        element: el,
-        quotationId: q.id,
-        customerName: q.customer.name,
-        onProgress: (status) => showToast(status)
-      });
-      showToast(`Downloaded PDF for ${q.id}`);
-    } catch (err) {
-      console.error('PDF export error:', err);
-      showToast('Download blocked. Opening Preview to Save as PDF...');
-      handlePreviewQuotation(q);
-    } finally {
-      setExportTargetQuote(null);
-    }
+  // Download PDF Handler - Opens Preview with direct print options
+  const handleDownloadPdf = (q: Quotation) => {
+    handlePreviewQuotation(q, 'pdf');
   };
 
-  // Direct Download JPG Handler
-  const handleDownloadJpg = async (q: Quotation) => {
-    try {
-      setExportTargetQuote(q);
-      showToast(`Preparing JPG for ${q.id}...`);
-
-      // Ensure React has committed and DOM has rendered
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
-      let el = document.getElementById('app-pdf-direct-export');
-      if (!el) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        el = document.getElementById('app-pdf-direct-export');
-      }
-
-      if (!el) {
-        showToast('Could not initialize export sheet. Opening Preview...');
-        setExportTargetQuote(null);
-        handlePreviewQuotation(q);
-        return;
-      }
-
-      showToast(`Rendering JPG for ${q.id}...`);
-      await generateAndDownloadJpg({
-        element: el,
-        quotationId: q.id,
-        customerName: q.customer.name,
-        onProgress: (status) => showToast(status)
-      });
-      showToast(`Downloaded JPG image for ${q.id}`);
-    } catch (err) {
-      console.error('JPG export error:', err);
-      showToast('Download blocked. Opening Preview to save image...');
-      handlePreviewQuotation(q);
-    } finally {
-      setExportTargetQuote(null);
-    }
+  // Download JPG Handler - Opens Preview and auto-starts high-res JPG export
+  const handleDownloadJpg = (q: Quotation) => {
+    handlePreviewQuotation(q, 'jpg');
+    showToast(`Generating high-resolution JPG for ${q.id}...`);
   };
 
   // WhatsApp Share Handler
@@ -348,28 +278,14 @@ export default function App() {
         quotation={previewQuotation}
         studioProfile={studioProfile}
         isOpen={isPreviewOpen}
-        onClose={() => setIsPreviewOpen(false)}
+        onClose={() => {
+          setIsPreviewOpen(false);
+          setPreviewInitialAction(null);
+        }}
+        initialExportAction={previewInitialAction}
       />
 
-      {/* Off-Screen Renderer for Direct List PDF/JPG Export */}
-      {exportTargetQuote && (
-        <div 
-          style={{
-            position: 'fixed',
-            left: 0,
-            top: 0,
-            zIndex: -99999,
-            pointerEvents: 'none',
-            opacity: 0.01
-          }}
-        >
-          <QuotationSheetA4
-            id="app-pdf-direct-export"
-            quotation={exportTargetQuote}
-            studioProfile={studioProfile}
-          />
-        </div>
-      )}
+
     </div>
   );
 }

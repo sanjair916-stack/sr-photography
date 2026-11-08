@@ -43,7 +43,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
           <img
             src={logoUrl}
             alt="SR PHOTOGRAPHY"
-            crossOrigin="anonymous"
+            crossOrigin={logoUrl.startsWith('data:') ? undefined : 'anonymous'}
             className="w-full h-full object-cover rounded-inherit"
           />
         </div>
