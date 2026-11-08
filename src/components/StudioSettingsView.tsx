@@ -65,9 +65,10 @@ export const StudioSettingsView: React.FC<StudioSettingsViewProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Save Feedback
+  // Save Feedback & Error State
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   // Handle Logo File Upload
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,7 +76,7 @@ export const StudioSettingsView: React.FC<StudioSettingsViewProps> = ({
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file (PNG, JPG, SVG, WebP).');
+      setSettingsError('Please upload a valid image file (PNG, JPG, SVG, WebP).');
       return;
     }
 
@@ -97,7 +98,7 @@ export const StudioSettingsView: React.FC<StudioSettingsViewProps> = ({
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file (PNG, JPG, SVG, WebP).');
+      setSettingsError('Please upload a valid image file (PNG, JPG, SVG, WebP).');
       return;
     }
 
@@ -166,7 +167,7 @@ export const StudioSettingsView: React.FC<StudioSettingsViewProps> = ({
       setTimeout(() => setSaveSuccessMsg(''), 4000);
     } catch (err) {
       console.error(err);
-      alert('Failed to save service prices.');
+      setSettingsError('Failed to save service prices.');
     } finally {
       setIsSaving(false);
     }
@@ -218,7 +219,7 @@ export const StudioSettingsView: React.FC<StudioSettingsViewProps> = ({
       setTimeout(() => setSaveSuccessMsg(''), 4000);
     } catch (err) {
       console.error(err);
-      alert('Failed to save settings.');
+      setSettingsError('Failed to save studio profile settings.');
     } finally {
       setIsSaving(false);
     }
@@ -261,6 +262,19 @@ export const StudioSettingsView: React.FC<StudioSettingsViewProps> = ({
           Configure business branding, official logo, default photography service prices, contact information, and legal quotation terms.
         </p>
       </div>
+
+      {settingsError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-red-800 text-xs font-semibold shadow-xs">
+          <span>{settingsError}</span>
+          <button
+            type="button"
+            onClick={() => setSettingsError(null)}
+            className="text-red-700 hover:text-red-950 underline cursor-pointer ml-3"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {saveSuccessMsg && (
         <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-emerald-800 text-xs font-semibold shadow-xs">

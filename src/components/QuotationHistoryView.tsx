@@ -52,8 +52,9 @@ export const QuotationHistoryView: React.FC<QuotationHistoryViewProps> = ({
   const [quoteToDelete, setQuoteToDelete] = useState<Quotation | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Duplication State
+  // Duplication & Error State
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   // Filter & Search Logic
   const filteredQuotations = useMemo(() => {
@@ -80,11 +81,12 @@ export const QuotationHistoryView: React.FC<QuotationHistoryViewProps> = ({
     if (!quoteToDelete) return;
     try {
       setIsDeleting(true);
+      setHistoryError(null);
       await onDeleteQuotation(quoteToDelete.id);
       setQuoteToDelete(null);
     } catch (err) {
       console.error(err);
-      alert('Failed to delete quotation.');
+      setHistoryError('Failed to delete quotation. Please try again.');
     } finally {
       setIsDeleting(false);
     }
@@ -93,20 +95,22 @@ export const QuotationHistoryView: React.FC<QuotationHistoryViewProps> = ({
   const handleDuplicate = async (id: string) => {
     try {
       setDuplicatingId(id);
+      setHistoryError(null);
       await onDuplicateQuotation(id);
     } catch (err) {
       console.error(err);
-      alert('Failed to duplicate quotation.');
+      setHistoryError('Failed to duplicate quotation. Please try again.');
     } finally {
       setDuplicatingId(null);
     }
   };
 
   const handleWhatsApp = (q: Quotation) => {
+    setHistoryError(null);
     const message = generateWhatsAppMessage(q, studioProfile);
     const targetPhone = q.customer.whatsapp || q.customer.mobile;
     if (!targetPhone) {
-      alert('No mobile/whatsapp number saved for this quotation.');
+      setHistoryError(`No phone number recorded for customer ${q.customer.name}.`);
       return;
     }
     const url = getWhatsAppUrl(targetPhone, message);
@@ -134,6 +138,21 @@ export const QuotationHistoryView: React.FC<QuotationHistoryViewProps> = ({
           <span>New Quotation</span>
         </button>
       </div>
+
+      {historyError && (
+        <div className="p-3.5 bg-red-50 border border-red-300 text-red-800 rounded-xl text-xs font-semibold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{historyError}</span>
+          </div>
+          <button
+            onClick={() => setHistoryError(null)}
+            className="text-red-700 hover:text-red-900 underline text-xs cursor-pointer ml-3"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Filter and Search Controls Bar */}
       <div className="bg-white border border-stone-200/90 rounded-xl p-4 shadow-xs space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">

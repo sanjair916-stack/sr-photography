@@ -17,16 +17,54 @@
 
 /* A4 Print & Canvas Sizing */
 @media print {
-  body {
+  html, body {
     background: white !important;
     color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
+
   .no-print {
     display: none !important;
   }
+
   .print-only {
     display: block !important;
   }
+
+  /* Reset modal fixed overlay to allow clean print */
+  .modal-print-container {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    width: auto !important;
+    inset: auto !important;
+  }
+
+  .modal-print-content {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .sheet-print-wrapper {
+    transform: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    margin: 0 auto !important;
+  }
+
   @page {
     size: A4 portrait;
     margin: 0;

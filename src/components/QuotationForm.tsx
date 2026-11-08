@@ -17,9 +17,10 @@ import {
   Layers, 
   Info, 
   RotateCcw,
-  Sparkles,
   Image as ImageIcon,
-  FileText
+  FileText,
+  Printer,
+  AlertCircle
 } from 'lucide-react';
 import { Quotation, StudioProfile, PhotographyService, BookingStatus, PaymentStatus } from '../types';
 import { DEFAULT_SERVICES, EVENT_TYPES } from '../constants';
@@ -112,6 +113,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
   // UI Feedback State
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [pdfStatus, setPdfStatus] = useState('');
   const [isDownloadingJpg, setIsDownloadingJpg] = useState(false);
@@ -168,6 +170,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
 
   // Service toggle
   const toggleService = (id: string) => {
+    if (formError) setFormError(null);
     setServices((prev) =>
       prev.map((s) => (s.id === id ? { ...s, selected: !s.selected } : s))
     );
@@ -292,21 +295,24 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     };
   };
 
-  // Save Quotation Handler
+  // Save Quotation Handler with Zero Alert Suppression
   const handleSave = async () => {
+    setFormError(null);
+    setSaveSuccessMsg('');
+
     if (!customerName.trim()) {
-      alert('Please enter Customer Name before saving.');
+      setFormError('Please enter Customer Name before saving the quotation.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     const selectedCount = services.filter((s) => s.selected).length;
     if (selectedCount === 0) {
-      alert('Please select at least one photography service.');
+      setFormError('Please select at least one Photography Service before saving.');
       return;
     }
 
     setIsSaving(true);
-    setSaveSuccessMsg('');
 
     try {
       const quotePayload = getCurrentQuotationObject();
@@ -332,15 +338,16 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
         saved = await res.json();
       }
 
-      setSaveSuccessMsg(`Quotation ${saved.id} successfully saved!`);
+      setSaveSuccessMsg(`✓ Quotation ${saved.id} successfully saved to database!`);
+      setFormError(null);
       onSaveSuccess(saved);
 
       setTimeout(() => {
         setSaveSuccessMsg('');
-      }, 5000);
+      }, 6000);
     } catch (err) {
       console.error(err);
-      alert('Error saving quotation to persistent store.');
+      setFormError('Error saving quotation to database. Please check your network and try again.');
     } finally {
       setIsSaving(false);
     }
@@ -357,9 +364,10 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
 
   // Direct Download PDF Handler
   const handleDownloadPdf = async () => {
+    setFormError(null);
     const el = document.getElementById('hidden-a4-sheet-generator');
     if (!el) {
-      alert('Quotation sheet renderer is not ready.');
+      setFormError('Quotation sheet renderer is not ready. Please try opening Preview first.');
       return;
     }
 
@@ -376,7 +384,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
       });
     } catch (err) {
       console.error(err);
-      alert('Failed to generate PDF file. Please try again.');
+      setFormError('Automatic PDF download blocked. Please click "Preview & Print (Save as PDF)" to save directly.');
     } finally {
       setIsDownloadingPdf(false);
       setPdfStatus('');
@@ -385,9 +393,10 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
 
   // Direct Download JPG Handler
   const handleDownloadJpg = async () => {
+    setFormError(null);
     const el = document.getElementById('hidden-a4-sheet-generator');
     if (!el) {
-      alert('Quotation sheet renderer is not ready.');
+      setFormError('Quotation sheet renderer is not ready. Please try opening Preview first.');
       return;
     }
 
@@ -404,7 +413,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
       });
     } catch (err) {
       console.error(err);
-      alert('Failed to generate JPG image. Please try again.');
+      setFormError('Automatic JPG download encountered an issue. Please click "Preview & Print (Save as PDF)" to view and save.');
     } finally {
       setIsDownloadingJpg(false);
       setJpgStatus('');
@@ -413,12 +422,13 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
 
   // WhatsApp Share Handler
   const handleWhatsApp = () => {
+    setFormError(null);
     const quote = getCurrentQuotationObject();
     if (!quote.id) quote.id = 'SRP-PENDING';
     const message = generateWhatsAppMessage(quote, studioProfile);
     const targetPhone = whatsappNumber || mobileNumber;
     if (!targetPhone) {
-      alert('Please enter a Mobile or WhatsApp number for this customer.');
+      setFormError('Please enter a Mobile or WhatsApp number for this customer to share via WhatsApp.');
       return;
     }
     const url = getWhatsAppUrl(targetPhone, message);
@@ -514,7 +524,10 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                   <input
                     type="text"
                     value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
+                    onChange={(e) => {
+                      setCustomerName(e.target.value);
+                      if (formError) setFormError(null);
+                    }}
                     placeholder="e.g. Aditya & Sneha Verma"
                     required
                     className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
@@ -934,7 +947,26 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
             </div>
 
             {/* Action Buttons Box */}
-            <div className="bg-white border border-stone-200/90 rounded-xl p-4 shadow-xs space-y-2.5">
+            <div className="bg-white border border-stone-200/90 rounded-xl p-4 shadow-xs space-y-3">
+              {/* Validation Error Banner */}
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-300 text-red-800 rounded-lg text-xs font-semibold flex items-start gap-2 shadow-xs">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="font-bold">Required Information</div>
+                    <div className="text-[11px] font-normal text-red-700 mt-0.5">{formError}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Save Success Banner */}
+              {saveSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-xs">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{saveSuccessMsg}</span>
+                </div>
+              )}
+
               {/* Primary: Save Quotation */}
               <button
                 type="button"
@@ -947,22 +979,24 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    <span>Save Quotation</span>
+                    <span>Save Quotation to Database</span>
                   </>
                 )}
               </button>
 
-              {/* Secondary Actions Row */}
-              <div className="grid grid-cols-3 gap-1.5">
-                <button
-                  type="button"
-                  onClick={handlePreview}
-                  className="py-2 px-2 bg-stone-100 hover:bg-stone-200 text-stone-800 font-semibold text-xs rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                >
-                  <Eye className="w-3.5 h-3.5 text-stone-600" />
-                  <span>Preview</span>
-                </button>
+              {/* Direct Print / Save as PDF Button */}
+              <button
+                type="button"
+                onClick={handlePreview}
+                className="w-full py-2.5 px-3 bg-stone-900 hover:bg-stone-800 text-amber-300 font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-sm"
+                title="Open full A4 preview and print or save as PDF"
+              >
+                <Printer className="w-4 h-4 text-amber-400" />
+                <span>Preview & Save as PDF (Print)</span>
+              </button>
 
+              {/* Secondary Actions Row */}
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={handleDownloadJpg}
@@ -971,18 +1005,18 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                   title="Download High-Resolution A4 JPG image"
                 >
                   <ImageIcon className="w-3.5 h-3.5" />
-                  <span className="truncate">{isDownloadingJpg ? jpgStatus || '...' : 'JPG'}</span>
+                  <span className="truncate">{isDownloadingJpg ? jpgStatus || '...' : 'Download JPG'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleDownloadPdf}
                   disabled={isDownloadingPdf}
-                  className="py-2 px-2 bg-stone-900 hover:bg-stone-800 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors disabled:opacity-50"
+                  className="py-2 px-2 bg-stone-800 hover:bg-stone-700 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors disabled:opacity-50"
                   title="Download A4 PDF file"
                 >
                   <FileText className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="truncate">{isDownloadingPdf ? pdfStatus || '...' : 'PDF'}</span>
+                  <span className="truncate">{isDownloadingPdf ? pdfStatus || '...' : 'File PDF'}</span>
                 </button>
               </div>
 
@@ -1000,8 +1034,17 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
         </div>
       </div>
 
-      {/* Hidden Off-Screen A4 Sheet for direct PDF generation */}
-      <div className="fixed -left-[9999px] -top-[9999px] pointer-events-none">
+      {/* Off-Screen A4 Sheet for direct PDF/JPG generation */}
+      <div 
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          zIndex: -99999,
+          pointerEvents: 'none',
+          opacity: 0.01
+        }}
+      >
         <QuotationSheetA4
           id="hidden-a4-sheet-generator"
           quotation={getCurrentQuotationObject()}

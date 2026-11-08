@@ -107,51 +107,80 @@ export default function App() {
 
   // Direct Download PDF Handler
   const handleDownloadPdf = async (q: Quotation) => {
-    setExportTargetQuote(q);
-    // Give browser a frame to update hidden element
-    setTimeout(async () => {
-      const el = document.getElementById('app-pdf-direct-export');
-      if (el) {
-        try {
-          showToast(`Generating PDF for ${q.id}...`);
-          await generateAndDownloadPdf({
-            element: el,
-            quotationId: q.id,
-            customerName: q.customer.name
-          });
-          showToast(`Downloaded PDF for ${q.id}`);
-        } catch (err) {
-          console.error(err);
-          alert('Could not download PDF.');
-        } finally {
-          setExportTargetQuote(null);
-        }
+    try {
+      setExportTargetQuote(q);
+      showToast(`Preparing PDF for ${q.id}...`);
+
+      // Ensure React has committed and DOM has rendered
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      let el = document.getElementById('app-pdf-direct-export');
+      if (!el) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        el = document.getElementById('app-pdf-direct-export');
       }
-    }, 150);
+
+      if (!el) {
+        showToast('Could not initialize export sheet. Opening Preview...');
+        setExportTargetQuote(null);
+        handlePreviewQuotation(q);
+        return;
+      }
+
+      showToast(`Rendering PDF for ${q.id}...`);
+      await generateAndDownloadPdf({
+        element: el,
+        quotationId: q.id,
+        customerName: q.customer.name,
+        onProgress: (status) => showToast(status)
+      });
+      showToast(`Downloaded PDF for ${q.id}`);
+    } catch (err) {
+      console.error('PDF export error:', err);
+      showToast('Download blocked. Opening Preview to Save as PDF...');
+      handlePreviewQuotation(q);
+    } finally {
+      setExportTargetQuote(null);
+    }
   };
 
   // Direct Download JPG Handler
   const handleDownloadJpg = async (q: Quotation) => {
-    setExportTargetQuote(q);
-    setTimeout(async () => {
-      const el = document.getElementById('app-pdf-direct-export');
-      if (el) {
-        try {
-          showToast(`Generating JPG for ${q.id}...`);
-          await generateAndDownloadJpg({
-            element: el,
-            quotationId: q.id,
-            customerName: q.customer.name
-          });
-          showToast(`Downloaded JPG image for ${q.id}`);
-        } catch (err) {
-          console.error(err);
-          alert('Could not download JPG image.');
-        } finally {
-          setExportTargetQuote(null);
-        }
+    try {
+      setExportTargetQuote(q);
+      showToast(`Preparing JPG for ${q.id}...`);
+
+      // Ensure React has committed and DOM has rendered
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      let el = document.getElementById('app-pdf-direct-export');
+      if (!el) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        el = document.getElementById('app-pdf-direct-export');
       }
-    }, 150);
+
+      if (!el) {
+        showToast('Could not initialize export sheet. Opening Preview...');
+        setExportTargetQuote(null);
+        handlePreviewQuotation(q);
+        return;
+      }
+
+      showToast(`Rendering JPG for ${q.id}...`);
+      await generateAndDownloadJpg({
+        element: el,
+        quotationId: q.id,
+        customerName: q.customer.name,
+        onProgress: (status) => showToast(status)
+      });
+      showToast(`Downloaded JPG image for ${q.id}`);
+    } catch (err) {
+      console.error('JPG export error:', err);
+      showToast('Download blocked. Opening Preview to save image...');
+      handlePreviewQuotation(q);
+    } finally {
+      setExportTargetQuote(null);
+    }
   };
 
   // WhatsApp Share Handler
@@ -159,7 +188,7 @@ export default function App() {
     const msg = generateWhatsAppMessage(q, studioProfile);
     const targetPhone = q.customer.whatsapp || q.customer.mobile;
     if (!targetPhone) {
-      alert('No phone number saved for this quotation.');
+      showToast('No phone number saved for this quotation.');
       return;
     }
     const url = getWhatsAppUrl(targetPhone, msg);
@@ -322,9 +351,18 @@ export default function App() {
         onClose={() => setIsPreviewOpen(false)}
       />
 
-      {/* Hidden Off-Screen Renderer for Direct List PDF Export */}
+      {/* Off-Screen Renderer for Direct List PDF/JPG Export */}
       {exportTargetQuote && (
-        <div className="fixed -left-[9999px] -top-[9999px] pointer-events-none">
+        <div 
+          style={{
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            zIndex: -99999,
+            pointerEvents: 'none',
+            opacity: 0.01
+          }}
+        >
           <QuotationSheetA4
             id="app-pdf-direct-export"
             quotation={exportTargetQuote}

@@ -1,198 +1,110 @@
-# SR PHOTOGRAPHY – Premium Quotation Management Website
+# SR PHOTOGRAPHY – Quotation Save, Full Preview & Print Export Fix
 
-A comprehensive, production-grade quotation management and booking operations portal tailored for **SR PHOTOGRAPHY**. The platform enables studio admins to create instant, professional photography quotations, perform real-time financial calculations in Indian Rupees (₹), preview and generate pixel-perfect A4 portrait PDFs in a Modern Minimalist White & Gold aesthetic, manage bookings and payment states, share breakdowns directly via WhatsApp, and persist all records securely to a dedicated database.
+Fix the quotation saving workflow to prevent silent validation failures, render a complete unclipped scrollable A4 preview showing all services and signatures, and provide seamless browser print "Save as PDF" alongside an interactive image export modal.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> **Confirmed Choices & Default Configurations:**
-> - **PDF Quotation Aesthetic**: Modern Minimalist White with subtle gold accents (`#C5A059`, `#D4AF37`) and clean grid structure, as selected during initial clarification.
-> - **Admin Authentication**: Pre-configured master admin password with persistent session storage, session lock, and self-service password update in Studio Settings. (Default credentials: username `admin`, password `srphotography2026` or customizable).
-> - **Studio Profile & Contact Data**: Comprehensive customizable Studio Settings panel where the admin can upload their official SR PHOTOGRAPHY logo, configure phone number, WhatsApp contact, studio address, email, UPI ID/Bank account for advance payments, and legal terms & conditions.
-> - **Data Persistence**: Express server with robust persistent JSON file store (`data/quotations.json` & `data/settings.json`) backed by automatic client-side sync to guarantee that data never gets lost on page refresh or browser restart.
+> The following architectural decisions have been aligned based on your clarifying feedback:
+
+- **Save Failure Resolution**: Replace suppressed `window.alert()` calls with clear, visible inline warning banners and reactive field validation. The save button will immediately communicate missing fields or save status directly on screen.
+- **Full Quotation Page Display**: Remove container clipping (`overflow-hidden` constraints and artificial max-height limits) in the preview modal. The quotation sheet will render in its entirety from the top gold logo badge down through all selected services, financials, terms, and the authorized signatory stamp with smooth vertical scrolling.
+- **Browser Print "Save as PDF" Export**: Add an optimized A4 print stylesheet and direct print trigger (`window.print()`) that invokes the browser's native print engine. This circumvents iframe sandbox download restrictions and outputs a crisp, authentic vector PDF document.
+- **Interactive One-Click JPG Save Modal**: For image downloads, provide an interactive export modal that presents the generated high-resolution JPG directly with a "Save Image", "Copy Image", and "Download File" button so the user is never blocked by browser download policies.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: Complete end-to-end quotation workflow: client intake -> multi-service selection & custom packages -> automatic subtotal, discount, advance, and remaining balance math -> instant A4 PDF rendering and downloading -> 1-click WhatsApp messaging -> quotation history with full CRUD, search, filter, and duplication.
-- **Target Audience / Persona**: Studio Owner & Lead Photographer at SR PHOTOGRAPHY managing client consultations, wedding bookings, and financial tracking without manual paper estimates.
-- **Key Value**: Replaces error-prone manual spreadsheets with an executive white-and-gold portal that issues accurate, branded PDF quotations in under 60 seconds and tracks payment status from quotation to completed shoot.
+- **What It Does**: Resolves friction points in the SR PHOTOGRAPHY admin portal by ensuring quotations always save predictably with instant visual feedback, display completely in the preview modal without truncated tables or signatures, and export flawlessly to PDF and JPG using both native browser print dialogs and direct image capture.
+- **Target Audience**: SR PHOTOGRAPHY studio owner and administration team generating commercial wedding and lifestyle event quotations.
+- **Key Value**: Guarantees zero lost customer records, full visibility of multi-service quotations, and instant creation of client-ready A4 PDFs and JPGs suitable for direct client sharing and printing.
 
 ---
 
 ## 2. User Experience & Visual Design
 
 ### Key User Flows
-1. **Admin Authentication**:
-   - Secure login screen with White & Gold branding, password masking, and error notifications.
-   - Guarded routes ensuring all dashboard, quotation, and history views remain strictly admin-only.
-2. **Dashboard Overview**:
-   - High-density KPI cards: Total Quotations, Confirmed Bookings, Total Quotation Value (₹), Advance Received (₹), and Pending Balance (₹).
-   - Quick action bar: "Create New Quotation", "View History", "Studio Settings".
-   - Recent Quotations list with quick status pills and direct PDF download/WhatsApp triggers.
-3. **Quotation Creator**:
-   - Two-column layout: Left column contains Customer Details (Name, Phone, WhatsApp, Email, Event Date, Location, Event Type) and Service Catalog (checkboxes with default prices + dynamic custom services).
-   - Right column features sticky Financial Ledger: real-time Subtotal, Discount toggle (₹ or %), Final Total, Advance Paid input, and Remaining Balance with validation safeguards against negative values.
-   - Bottom Action Bar: "Save Quotation", "Live A4 Preview", "Download PDF", "Share on WhatsApp".
-4. **Interactive A4 Portrait Preview & PDF Generator**:
-   - Exact 210mm x 297mm (A4) aspect ratio canvas.
-   - Clean gold foil line accents, header with SR PHOTOGRAPHY logo and studio credentials, customer/event metadata block, itemized services ledger with unit rates, payment breakdown summary, legal terms, and dual signature zones (Client & Authorized Signatory).
-   - Instant client-side PDF export matching the exact visual preview.
-5. **Quotation History & Booking Management**:
-   - Searchable table filtering by Customer Name, Phone Number, or Quotation Number (`SRP-YYYY-XXXX`).
-   - Filters by Booking Status (`Quotation`, `Confirmed Booking`, `Completed`, `Cancelled`) and Payment Status (`Advance Pending`, `Partially Paid`, `Fully Paid`).
-   - Row action menu: View/Preview, Download PDF, Send WhatsApp, Edit, Duplicate, and Delete (with confirmation modal).
-6. **Studio Settings**:
-   - Upload and preview SR PHOTOGRAPHY logo (stores data URL locally and on server).
-   - Update contact information, studio address, UPI ID / bank details for advances, and standard terms of service.
-   - Update admin login credentials.
 
-### Visual Identity & Theme
-- **Aesthetic Direction**: Modern Minimalist White & Gold luxury. Generous white space, architectural hairline borders, warm gold metallic accents, and high-contrast typography reflecting high-end photography craftsmanship.
-- **Color Palette**:
-  - Dominant Canvas (60%): Clean Pure White (`#FFFFFF`) with ultra-subtle off-white background fields (`#FAFAF8`).
-  - Structural Surfaces (30%): Soft cream/warm-neutral cards (`#FFFFFF`), subtle hairline borders (`#EAE6DF` / `#DFD9CE`), and rich slate-charcoal text (`#1A1A1A` and `#4A4A4A`).
-  - Accent Budget (10%): Warm Metallic Gold (`#C5A059`, `#B38E3E`, hover `#9E7A2E`) applied deliberately to primary action buttons, active tab indicators, table header borders, and the PDF branding rule.
-- **Typography**:
-  - Display & Headings: `Plus Jakarta Sans` or `Cinzel` / `Outfit` for brand elegance and refined structure.
-  - Body & UI: `Plus Jakarta Sans` / `DM Sans` (14px–16px, 1.5 line height).
-  - Numbers & Ledgers: Strict tabular figures (`tabular-nums font-mono`) for all Indian Rupee amounts and quotation IDs.
+1. **Quotation Creation & Save Flow**:
+   - Admin fills in customer details (Customer Name, Mobile, Event Date, Location, Type).
+   - If a required field is empty when clicking "Save Quotation", a distinct gold-bordered alert banner appears directly above the button with high-contrast copy (e.g., *"Please provide customer name and select at least one service before saving"*).
+   - Upon successful save, the button transitions to a reassuring emerald badge (*"Quotation SRP-2026-XXXX Saved!"*) and automatically refreshes the recent quotation feed without leaving the form.
+
+2. **Full Scrollable A4 Preview**:
+   - Clicking "Preview" opens an expansive modal with a dark velvet backdrop (`bg-stone-950/85`).
+   - The white and gold A4 sheet is displayed at 100% natural resolution or user-adjusted zoom (50% to 120%).
+   - The modal viewport enables smooth vertical scrolling so that regardless of how many photography services are selected (from 1 to 14+), the client details, entire itemized fee table, balance breakdown, legal terms, and dual signatures are completely visible.
+
+3. **Export Actions (Print & Save)**:
+   - **"Save as PDF (Print)"**: Triggers `window.print()` with `@page { size: A4 portrait; margin: 0; }`. The modal controls and background are hidden (`@media print { .no-print { display: none } }`), sending solely the A4 document to the browser's native print dialogue where the user selects "Save as PDF".
+   - **"Export JPG"**: Renders the document to a high-DPI image and opens a dedicated Export Dialog displaying the ready image with a "Download Image" button, a "Copy to Clipboard" button, and direct right-click instructions.
+
+### Visual Styling & Typographic Hierarchy
+
+- **Color Tokens**: White ground (`#FFFFFF`), warm charcoal typography (`#1C1917`), royal gold accents (`#C5A059`, `#DFB76C`), deep onyx headers (`#0C0A09`).
+- **Typography**: Cinzel serif display headers paired with clean Plus Jakarta Sans numerals and service descriptions.
+- **Feedback Alerts**: High-contrast, non-intrusive alert ribbons replacing native alert boxes.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Server-Side + Local Storage Dual Persistence**:
-  - *Chosen Approach*: Full-stack Express API with a persistent JSON store (`data/quotations.json`, `data/settings.json`) paired with client-side state synchronization.
-  - *Why*: Guarantees quotations remain safely stored across browser refreshes, server restarts, or separate device sessions without requiring external third-party cloud database subscriptions.
-  - *Alternatives Considered*: Pure browser `localStorage` (risks data loss if cache cleared) vs. Cloud SQL / Firebase (unnecessary friction and external provisioning when a self-contained persistent store fulfills requirements cleanly).
-- **Client-Side Vector/Canvas PDF Engine**:
-  - *Chosen Approach*: Pure A4 DOM layout paired with `html2canvas` and `jspdf` for high-resolution A4 portrait PDF generation with zero server rendering lag.
-  - *Why*: Ensures 100% visual fidelity between the "Preview" modal and the generated "Download PDF" file, incorporating the uploaded logo, gold styling, and exact fonts.
-- **Pre-Loaded Photography Service Catalog with Dynamic Customization**:
-  - *Chosen Approach*: Provide all 14 requested services pre-loaded with realistic standard market prices, while giving the admin immediate controls to add custom services, edit names, alter pricing, or delete line items on the fly.
-  - *Why*: Eliminates repetitive typing for everyday packages (e.g. Wedding + Reception + Drone) while supporting bespoke client requests.
+- **Decision 1: Native Browser Print vs. Automated Client-Side Canvas Download**:
+  - *Chosen Approach*: Support both, prioritizing the native **Browser Print Dialog ("Save as PDF")** via `window.print()` as requested by the user, while retaining client-side canvas generation.
+  - *Why*: In sandboxed iframe environments (like AI Studio previews), browsers frequently block `<a download>` program clicks for security reasons. `window.print()` operates at the browser level and is never blocked, producing 600+ DPI vector text without blurriness.
+  - *Alternatives Considered*: Pure server-side Puppeteer rendering (adds unnecessary backend latency and heavy Chromium dependencies).
+
+- **Decision 2: Inline Form Validation vs. Native Alert Dialogs**:
+  - *Chosen Approach*: Replace all `alert()` instances across `QuotationForm.tsx`, `App.tsx`, and `QuotationHistoryView.tsx` with dedicated stateful banner alerts and animated toast feedback.
+  - *Why*: Browsers automatically suppress `window.alert()` inside iframes to prevent UI lockups, creating the illusion that clicking "Save" does nothing. Inline banners are 100% reliable and provide clear instructions on what needs fixing.
+
+- **Decision 3: Unbounded Modal Scroll Container vs. Hardcoded 1123px Height**:
+  - *Chosen Approach*: Change the preview modal container from `overflow-hidden` to `overflow-y-auto` and allow `QuotationSheetA4` to expand dynamically with content while preserving standard A4 proportions.
+  - *Why*: Quotations with multiple services naturally require more vertical room. Users need to verify every service line item and the signatory block before sending.
 
 ---
 
 ## 4. Technical Architecture & Data Strategy
 
-### Architecture & Component Diagram
+### System Component Diagram
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        SR PHOTOGRAPHY WEB PORTAL                       │
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │                    Admin Authentication Guard                    │  │
-│  └──────────────────────────────────┬───────────────────────────────┘  │
-│                                     │                                  │
-│         ┌───────────────────────────┼────────────────────────┐         │
-│         ▼                           ▼                        ▼         │
-│  ┌──────────────┐          ┌─────────────────┐      ┌────────────────┐ │
-│  │  Dashboard   │          │ Quotation Form  │      │ Quotation List │ │
-│  │  - KPI Cards │          │ - Client Intake │      │ - Search/Filter│ │
-│  │  - Analytics │          │ - Service Grid  │      │ - Actions:     │ │
-│  │  - Status    │          │ - Auto Calc (₹) │      │   PDF/WhatsApp │ │
-│  │    Overview  │          │ - Custom Items  │      │   Edit/Dup/Del │ │
-│  └──────┬───────┘          └────────┬────────┘      └───────┬────────┘ │
-│         │                           │                       │          │
-│         │                  ┌────────▼────────┐              │          │
-│         │                  │ A4 PDF Preview  │              │          │
-│         │                  │ & jsPDF Engine  │              │          │
-│         │                  └────────┬────────┘              │          │
-│         │                           │                       │          │
-│         └───────────────────────────┼───────────────────────┘          │
-│                                     │                                  │
-│                                     ▼                                  │
-│                 ┌───────────────────────────────────────┐              │
-│                 │      Quotation State & Store Sync     │              │
-│                 └───────────────────┬───────────────────┘              │
-│                                     │                                  │
-└─────────────────────────────────────┼──────────────────────────────────┘
-                                      ▼
-                      ┌───────────────────────────────┐
-                      │    Express API (port 3000)    │
-                      │  /api/auth                    │
-                      │  /api/quotations (CRUD)       │
-                      │  /api/settings (Profile/Logo) │
-                      └───────────────┬───────────────┘
-                                      ▼
-                      ┌───────────────────────────────┐
-                      │  Persistent Storage (data/)   │
-                      │  - data/quotations.json       │
-                      │  - data/settings.json         │
-                      └───────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    SR PHOTOGRAPHY Admin Portal                  │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+         ┌───────────────────────┴───────────────────────┐
+         ▼                                               ▼
+┌─────────────────────────────────┐             ┌─────────────────────────────────┐
+│      Quotation Form View        │             │      Quotation Preview Modal    │
+│  - Reactive field validation    │             │  - Full vertical scrolling      │
+│  - Inline error alert ribbon    │             │  - Unclipped A4 sheet display   │
+│  - Real-time subtotal & balance │             │  - Zoom control (50% - 120%)    │
+│  - Direct Save to Express API   │             │  - Dual Export Buttons:         │
+└────────────────┬────────────────┘             │    • Browser Print (Save as PDF)│
+                 │                              │    • JPG Export Dialog          │
+                 │                              └────────────────┬────────────────┘
+                 ▼                                               │
+┌─────────────────────────────────┐                              │
+│       Express Persistence       │                              │
+│  - POST /api/quotations         │◄─────────────────────────────┘
+│  - PUT /api/quotations/:id      │
+│  - File store in data/*.json    │
+└─────────────────────────────────┘
 ```
 
-### Data Models
+### Component & State Interaction Mapping
 
-```typescript
-export interface PhotographyService {
-  id: string;
-  name: string;
-  category?: string;
-  price: number;
-  selected: boolean;
-  notes?: string;
-}
+1. **Validation State (`formError: string | null`)**:
+   - Added to `QuotationForm.tsx`. Cleared whenever user types in `Customer Name` or selects a service.
+   - If user attempts to save while invalid, sets `formError` with specific corrective instructions and smoothly scrolls into view.
 
-export interface Quotation {
-  id: string; // e.g. "SRP-2026-0001"
-  createdAt: string;
-  updatedAt: string;
-  customer: {
-    name: string;
-    mobile: string;
-    whatsapp: string;
-    email: string;
-    eventDate: string;
-    eventLocation: string;
-    eventType: string; // Wedding, Reception, Engagement, Birthday, etc.
-  };
-  services: {
-    id: string;
-    name: string;
-    price: number;
-  }[];
-  financials: {
-    subtotal: number;
-    discountType: 'rupees' | 'percentage';
-    discountValue: number;
-    discountAmount: number;
-    finalTotal: number;
-    advancePaid: number;
-    remainingBalance: number;
-  };
-  status: 'Quotation' | 'Confirmed Booking' | 'Completed' | 'Cancelled';
-  paymentStatus: 'Advance Pending' | 'Partially Paid' | 'Fully Paid';
-  customNotes?: string;
-}
+2. **A4 Print CSS Configuration**:
+   - In `index.css`, establish dedicated print rules:
+     - `@page { size: A4 portrait; margin: 0; }`
+     - `.print-only` visible solely during print; all navigation, modal backdrops, zoom buttons, and toolbars marked `.no-print`.
+     - Forces browser print to render background colors and gold borders (`-webkit-print-color-adjust: exact`).
 
-export interface StudioProfile {
-  businessName: string;
-  tagline: string;
-  phone: string;
-  whatsapp: string;
-  email: string;
-  address: string;
-  gstNumber?: string;
-  bankDetails: {
-    accountName: string;
-    bankName: string;
-    accountNumber: string;
-    ifscCode: string;
-    upiId: string;
-  };
-  termsAndConditions: string[];
-  logoDataUrl?: string;
-}
-```
-
-### Interactive Verification Plan
-1. **Authentication Flow**: Verify login with valid credentials, session retention on refresh, and secure logout.
-2. **Quotation Math**: Test subtotal summing, percentage vs. rupee discount calculation, negative amount prevention, and remaining balance calculations.
-3. **PDF Generation**: Verify A4 portrait dimensions, rendering of logo, customer details, service table, financial breakdown, and signatures; ensure download creates a valid non-empty `.pdf` file.
-4. **CRUD & Search**: Test creation, saving, editing, duplication, deletion with confirmation, and real-time search by name, phone, and quotation number.
-5. **WhatsApp Integration**: Test WhatsApp deep-link generation with formatted message content.
+3. **JPG Export Modal (`exportImageModalUrl: string | null`)**:
+   - When "Export JPG" is clicked, converts the canvas to an image URL and opens a focused review modal with immediate download and copy triggers.
