@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Save, 
   Eye, 
@@ -17,7 +17,7 @@ import {
   Layers, 
   Info, 
   RotateCcw,
-  Image as ImageIcon,
+  Image as ImageIcon, 
   FileText,
   Printer,
   AlertCircle
@@ -45,6 +45,12 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
   onCancelEdit,
   onSaveDefaultServices
 }) => {
+  // Input references for active field focus on validation error
+  const customerNameInputRef = useRef<HTMLInputElement>(null);
+
+  // Active saved quotation ID tracking
+  const [savedId, setSavedId] = useState<string | null>(initialQuotation?.id || null);
+
   // Customer Details State
   const [customerName, setCustomerName] = useState(initialQuotation?.customer.name || '');
   const [mobileNumber, setMobileNumber] = useState(initialQuotation?.customer.mobile || '');
@@ -295,40 +301,42 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     };
   };
 
-  // Save Quotation Handler with Zero Alert Suppression
-  const handleSave = async () => {
+  // Save Quotation Handler with Zero Alert Suppression & Local ID Persistence
+  const handleSave = async (): Promise<Quotation | null> => {
     setFormError(null);
     setSaveSuccessMsg('');
 
     if (!customerName.trim()) {
-      setFormError('Please enter Customer Name before saving the quotation.');
+      setFormError('Please enter Customer / Couple Name before saving the quotation.');
+      customerNameInputRef.current?.focus();
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
+      return null;
     }
 
     const selectedCount = services.filter((s) => s.selected).length;
     if (selectedCount === 0) {
       setFormError('Please select at least one Photography Service before saving.');
-      return;
+      return null;
     }
 
     setIsSaving(true);
 
     try {
       const quotePayload = getCurrentQuotationObject();
+      const currentId = savedId || initialQuotation?.id;
 
       let saved: Quotation;
-      if (initialQuotation?.id) {
-        // Update
-        const res = await fetch(`/api/quotations/${initialQuotation.id}`, {
+      if (currentId) {
+        // Update existing quotation in database
+        const res = await fetch(`/api/quotations/${currentId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(quotePayload)
+          body: JSON.stringify({ ...quotePayload, id: currentId })
         });
         if (!res.ok) throw new Error('Failed to update quotation');
         saved = await res.json();
       } else {
-        // Create new
+        // Create new quotation in database
         const res = await fetch('/api/quotations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -338,18 +346,29 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
         saved = await res.json();
       }
 
+      setSavedId(saved.id);
       setSaveSuccessMsg(`✓ Quotation ${saved.id} successfully saved to database!`);
       setFormError(null);
       onSaveSuccess(saved);
 
       setTimeout(() => {
         setSaveSuccessMsg('');
-      }, 6000);
-    } catch (err) {
+      }, 7000);
+      return saved;
+    } catch (err: any) {
       console.error(err);
-      setFormError('Error saving quotation to database. Please check your network and try again.');
+      setFormError(`Error saving quotation to database: ${err?.message || 'Network error'}. Please check your connection and try again.`);
+      return null;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // One-click Save & Download (Persists to database first, then opens preview with target export ready)
+  const handleSaveAndDownload = async (action: 'pdf' | 'jpg') => {
+    const saved = await handleSave();
+    if (saved) {
+      onOpenPreview(saved, action);
     }
   };
 
@@ -417,7 +436,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
           </p>
         </div>
 
-        {/* Live Status Controls */}
+        {/* Live Status Controls & Header Action Buttons */}
         <div className="flex flex-wrap items-center gap-3">
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-1">
@@ -449,13 +468,68 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
               <option value="Fully Paid">Fully Paid</option>
             </select>
           </div>
+
+          {/* Quick Action Buttons at top for mobile & desktop */}
+          <div className="flex items-end gap-2 pt-3 sm:pt-0">
+            <button
+              type="button"
+              onClick={() => handleSaveAndDownload('pdf')}
+              disabled={isSaving}
+              className="px-3 py-1.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-600 text-stone-950 font-bold text-xs uppercase tracking-wider rounded-lg shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              title="Save to database and open print dialog"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Save & PDF</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSaveAndDownload('jpg')}
+              disabled={isSaving}
+              className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-300 font-bold text-xs uppercase tracking-wider rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              title="Save to database and download A4 JPG"
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+              <span>Save & JPG</span>
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Prominent Top-of-Form Error Banner */}
+      {formError && (
+        <div className="p-4 bg-red-50 border-2 border-red-400 rounded-xl flex items-start justify-between gap-3 text-red-900 shadow-sm animate-pulse">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-xs uppercase tracking-wider text-red-800">
+                Action Required Before Saving
+              </div>
+              <div className="text-xs font-medium text-red-700 mt-0.5">{formError}</div>
+            </div>
+          </div>
+          <button
+            onClick={() => setFormError(null)}
+            className="text-red-500 hover:text-red-800 text-xs font-bold px-2 py-1 underline cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Prominent Top-of-Form Save Success Banner */}
       {saveSuccessMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-emerald-800 text-xs font-semibold shadow-xs">
-          <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-          <span>{saveSuccessMsg}</span>
+        <div className="p-4 bg-emerald-50 border-2 border-emerald-400 rounded-xl flex items-center justify-between text-emerald-900 text-xs font-semibold shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{saveSuccessMsg}</span>
+          </div>
+          <button
+            onClick={() => setSaveSuccessMsg('')}
+            className="text-emerald-700 hover:text-emerald-900 text-xs font-bold px-2 py-1 underline cursor-pointer"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -481,6 +555,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                 <div className="relative">
                   <User className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
+                    ref={customerNameInputRef}
                     type="text"
                     value={customerName}
                     onChange={(e) => {
@@ -489,7 +564,11 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                     }}
                     placeholder="e.g. Aditya & Sneha Verma"
                     required
-                    className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    className={`w-full pl-9 pr-3 py-2 bg-stone-50 border rounded-lg text-xs text-stone-900 focus:outline-none focus:ring-2 ${
+                      formError && !customerName.trim()
+                        ? 'border-red-500 ring-2 ring-red-400/40 bg-red-50/20'
+                        : 'border-stone-200 focus:ring-amber-500/20 focus:border-amber-500'
+                    }`}
                   />
                 </div>
               </div>
@@ -926,58 +1005,56 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                 </div>
               )}
 
-              {/* Primary: Save Quotation */}
+              {/* Primary: One-Click Save & Download PDF (Print) */}
               <button
                 type="button"
-                onClick={handleSave}
+                onClick={() => handleSaveAndDownload('pdf')}
                 disabled={isSaving}
-                className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-700 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99] disabled:opacity-50"
+                className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-600 text-stone-950 font-bold text-xs uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                title="Save quotation to database and open browser print dialog (Save as PDF)"
               >
-                {isSaving ? (
-                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    <span>Save Quotation to Database</span>
-                  </>
-                )}
+                <Printer className="w-4 h-4" />
+                <span>Save & Download PDF (Print)</span>
               </button>
 
-              {/* Direct Print / Save as PDF Button */}
+              {/* Secondary: One-Click Save & Download JPG */}
+              <button
+                type="button"
+                onClick={() => handleSaveAndDownload('jpg')}
+                disabled={isSaving}
+                className="w-full py-2.5 px-3 bg-stone-900 hover:bg-stone-800 text-amber-300 font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-sm disabled:opacity-50"
+                title="Save quotation to database and generate high-resolution JPG image"
+              >
+                <ImageIcon className="w-4 h-4 text-amber-400" />
+                <span>Save & Download JPG</span>
+              </button>
+
+              {/* Tertiary: Save Quotation to Database */}
+              <button
+                type="button"
+                onClick={() => handleSave()}
+                disabled={isSaving}
+                className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs disabled:opacity-50"
+                title="Save quotation details to database"
+              >
+                {isSaving ? (
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                <span>Save Quotation to Database</span>
+              </button>
+
+              {/* Quaternary: Preview Sheet without saving */}
               <button
                 type="button"
                 onClick={handlePreview}
-                className="w-full py-2.5 px-3 bg-stone-900 hover:bg-stone-800 text-amber-300 font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-sm"
-                title="Open full A4 preview and print or save as PDF"
+                className="w-full py-2 px-3 bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                title="Preview full A4 sheet"
               >
-                <Printer className="w-4 h-4 text-amber-400" />
-                <span>Preview & Save as PDF (Print)</span>
+                <Eye className="w-3.5 h-3.5 text-stone-500" />
+                <span>Preview A4 Sheet</span>
               </button>
-
-              {/* Secondary Actions Row */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={handleDownloadJpg}
-                  disabled={isDownloadingJpg}
-                  className="py-2 px-2 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-xs disabled:opacity-50"
-                  title="Download High-Resolution A4 JPG image"
-                >
-                  <ImageIcon className="w-3.5 h-3.5" />
-                  <span className="truncate">{isDownloadingJpg ? jpgStatus || '...' : 'Download JPG'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadPdf}
-                  disabled={isDownloadingPdf}
-                  className="py-2 px-2 bg-stone-800 hover:bg-stone-700 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors disabled:opacity-50"
-                  title="Download A4 PDF file"
-                >
-                  <FileText className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="truncate">{isDownloadingPdf ? pdfStatus || '...' : 'File PDF'}</span>
-                </button>
-              </div>
 
               {/* WhatsApp Share Button */}
               <button

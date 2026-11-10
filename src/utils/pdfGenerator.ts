@@ -1,5 +1,23 @@
-import html2canvas from 'html2canvas';
+import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
+
+/**
+ * Converts modern CSS colors (like oklch) into standard RGB/RGBA using native canvas context.
+ */
+function sanitizeColor(colorStr: string): string {
+  if (!colorStr || typeof colorStr !== 'string' || !colorStr.includes('oklch')) return colorStr;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return colorStr;
+    ctx.fillStyle = colorStr;
+    return ctx.fillStyle;
+  } catch {
+    return colorStr;
+  }
+}
 
 export interface GenerateExportOptions {
   element: HTMLElement;
@@ -14,12 +32,15 @@ export interface GenerateJpgResult {
   blob: Blob;
   filename: string;
   serverUrl?: string;
+  downloadUrl?: string;
 }
 
 export interface GeneratePdfResult {
   success: boolean;
   blob: Blob;
   filename: string;
+  serverUrl?: string;
+  downloadUrl?: string;
 }
 
 /**
@@ -33,24 +54,48 @@ async function inlineImagesAsDataUrls(container: HTMLElement): Promise<void> {
       try {
         if (!img.src || img.src.startsWith('data:')) return;
         
-        // Fetch image as blob
-        const res = await fetch(img.src);
-        if (!res.ok) return;
-        const blob = await res.blob();
-        
-        await new Promise<void>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            if (reader.result && typeof reader.result === 'string') {
-              img.src = reader.result;
+        // 1. Try fetch as blob
+        try {
+          const res = await fetch(img.src);
+          if (res.ok) {
+            const blob = await res.blob();
+            const dataUrl = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve((reader.result as string) || '');
+              reader.onerror = () => resolve('');
+              reader.readAsDataURL(blob);
+            });
+            if (dataUrl) {
+              img.src = dataUrl;
+              return;
             }
-            resolve();
-          };
-          reader.onerror = () => resolve();
-          reader.readAsDataURL(blob);
-        });
+          }
+        } catch {
+          // Continue to canvas fallback
+        }
+
+        // 2. Fallback: Draw on offscreen canvas
+        try {
+          const tempImg = new Image();
+          tempImg.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve, reject) => {
+            tempImg.onload = () => resolve();
+            tempImg.onerror = () => reject();
+            tempImg.src = img.src;
+          });
+          const c = document.createElement('canvas');
+          c.width = tempImg.naturalWidth || tempImg.width || 100;
+          c.height = tempImg.naturalHeight || tempImg.height || 100;
+          const ctx = c.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(tempImg, 0, 0);
+            img.src = c.toDataURL('image/png');
+          }
+        } catch {
+          // Continue without failing
+        }
       } catch (err) {
-        console.warn('Could not inline image src to base64:', img.src, err);
+        console.warn('Image inlining skipped:', img.src, err);
       }
     })
   );
@@ -58,7 +103,7 @@ async function inlineImagesAsDataUrls(container: HTMLElement): Promise<void> {
 
 /**
  * Triggers a browser file download using standard Blob Object URL.
- * Works across modern desktop and mobile browsers.
+ * Works across modern desktop and mobile browsers without opening popup windows.
  */
 export function triggerBlobDownload(blob: Blob, filename: string): void {
   try {
@@ -67,8 +112,6 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
     downloadLink.style.display = 'none';
     downloadLink.href = blobUrl;
     downloadLink.download = filename;
-    downloadLink.target = '_blank';
-    downloadLink.rel = 'noopener';
     
     document.body.appendChild(downloadLink);
     downloadLink.click();
@@ -90,7 +133,7 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
  */
 async function renderA4Canvas(
   element: HTMLElement,
-  preferredScale: number = 1.8,
+  preferredScale: number = 1.5,
   onProgress?: (status: string) => void
 ): Promise<HTMLCanvasElement> {
   if (onProgress) onProgress('Preparing fonts and assets...');
@@ -122,6 +165,7 @@ async function renderA4Canvas(
       logging: false,
       width: actualWidth,
       height: actualHeight,
+      windowWidth: 1024,
       scrollX: 0,
       scrollY: 0,
       x: 0,
@@ -176,6 +220,26 @@ async function renderA4Canvas(
             clonedDoc.body.style.padding = '0';
             clonedDoc.body.style.overflow = 'visible';
           }
+
+          // 5. Sanitize any inline style colors using oklch
+          try {
+            const allElements = Array.from(clonedTarget.querySelectorAll('*'));
+            allElements.forEach((node) => {
+              if (node instanceof HTMLElement && node.style) {
+                if (node.style.color && node.style.color.includes('oklch')) {
+                  node.style.color = sanitizeColor(node.style.color);
+                }
+                if (node.style.backgroundColor && node.style.backgroundColor.includes('oklch')) {
+                  node.style.backgroundColor = sanitizeColor(node.style.backgroundColor);
+                }
+                if (node.style.borderColor && node.style.borderColor.includes('oklch')) {
+                  node.style.borderColor = sanitizeColor(node.style.borderColor);
+                }
+              }
+            });
+          } catch {
+            // Continue safely
+          }
         } catch (cloneErr) {
           console.warn('onclone normalization notice:', cloneErr);
         }
@@ -186,9 +250,13 @@ async function renderA4Canvas(
   try {
     return await runCapture(preferredScale);
   } catch (initialErr) {
-    console.warn(`Capture at scale ${preferredScale} failed, retrying at scale 1.4:`, initialErr);
-    // Mobile Chrome memory / GPU limit fallback
-    return await runCapture(1.4);
+    console.warn(`Capture at scale ${preferredScale} failed, retrying at scale 1.2:`, initialErr);
+    try {
+      return await runCapture(1.2);
+    } catch (secondErr) {
+      console.warn('Capture at scale 1.2 failed, retrying at scale 1.0:', secondErr);
+      return await runCapture(1.0);
+    }
   }
 }
 
@@ -202,7 +270,7 @@ export async function generateAndDownloadPdf({
   onProgress
 }: GenerateExportOptions): Promise<GeneratePdfResult> {
   try {
-    const canvas = await renderA4Canvas(element, 1.8, onProgress);
+    const canvas = await renderA4Canvas(element, 1.5, onProgress);
 
     if (onProgress) onProgress('Compiling PDF file...');
 
@@ -243,12 +311,38 @@ export async function generateAndDownloadPdf({
 
     if (onProgress) onProgress('Initiating PDF download...');
     
-    // Use Blob URL download for maximum browser & iframe compatibility
+    // 1. jsPDF native save
+    try {
+      pdf.save(filename);
+    } catch (saveErr) {
+      console.warn('pdf.save notice:', saveErr);
+    }
+
+    // 2. Blob URL download trigger
     const pdfBlob = pdf.output('blob');
     triggerBlobDownload(pdfBlob, filename);
 
+    // 3. Persist to server static storage for direct HTTP download link
+    let serverUrl: string | undefined;
+    let downloadUrl: string | undefined;
+    try {
+      const pdfDataUrl = pdf.output('datauristring');
+      const response = await fetch('/api/save-download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl: pdfDataUrl, filename })
+      });
+      if (response.ok) {
+        const json = await response.json();
+        serverUrl = json.url;
+        downloadUrl = json.downloadUrl;
+      }
+    } catch (persistErr) {
+      console.warn('Could not persist PDF to server downloads:', persistErr);
+    }
+
     if (onProgress) onProgress('Download ready!');
-    return { success: true, blob: pdfBlob, filename };
+    return { success: true, blob: pdfBlob, filename, serverUrl, downloadUrl };
   } catch (error) {
     console.error('Failed to generate PDF:', error);
     throw error;
@@ -266,7 +360,7 @@ export async function generateAndDownloadJpg({
   onProgress
 }: GenerateExportOptions): Promise<GenerateJpgResult> {
   try {
-    const canvas = await renderA4Canvas(element, 1.8, onProgress);
+    const canvas = await renderA4Canvas(element, 1.5, onProgress);
 
     if (onProgress) onProgress('Packaging JPG image...');
 
@@ -312,6 +406,7 @@ export async function generateAndDownloadJpg({
 
     // Also persist to server downloads folder for direct static HTTP links
     let serverUrl: string | undefined;
+    let downloadUrl: string | undefined;
     try {
       const response = await fetch('/api/save-download', {
         method: 'POST',
@@ -321,13 +416,14 @@ export async function generateAndDownloadJpg({
       if (response.ok) {
         const json = await response.json();
         serverUrl = json.url;
+        downloadUrl = json.downloadUrl;
       }
     } catch (e) {
       console.warn('Could not persist to server downloads:', e);
     }
 
     if (onProgress) onProgress('JPG Ready!');
-    return { success: true, dataUrl, blob, filename, serverUrl };
+    return { success: true, dataUrl, blob, filename, serverUrl, downloadUrl };
   } catch (error) {
     console.error('Failed to generate JPG image:', error);
     throw error;

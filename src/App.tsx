@@ -137,8 +137,23 @@ export default function App() {
       return [saved, ...prev];
     });
 
-    setEditingQuotation(saved);
     showToast(`Quotation ${saved.id} successfully saved!`);
+  };
+
+  // Direct save handler for Preview Modal and one-click actions
+  const handleSaveQuotationDirect = async (q: Quotation): Promise<Quotation> => {
+    let saved: Quotation;
+    const isRealId = q.id && !q.id.includes('PREVIEW') && !q.id.includes('DRAFT') && !q.id.includes('PENDING');
+    const exists = isRealId && quotations.some((item) => item.id === q.id);
+    
+    if (exists) {
+      saved = await api.updateQuotation(q.id, q);
+    } else {
+      saved = await api.createQuotation(q);
+    }
+    handleSaveSuccess(saved);
+    setPreviewQuotation(saved);
+    return saved;
   };
 
   // Duplicate Quotation
@@ -283,6 +298,7 @@ export default function App() {
           setPreviewInitialAction(null);
         }}
         initialExportAction={previewInitialAction}
+        onSaveQuotation={handleSaveQuotationDirect}
       />
 
 

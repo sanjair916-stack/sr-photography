@@ -97,7 +97,13 @@ async function startServer() {
     next();
   });
   app.use(express.json({ limit: '25mb' })); // Support high-res base64 image uploads
-  app.use(express.static(path.resolve(__dirname, 'public')));
+  app.use(express.static(path.resolve(__dirname, 'public'), {
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+  }));
 
   // --- API Routes ---
 
@@ -112,10 +118,30 @@ async function startServer() {
       const base64Data = dataUrl.replace(/^data:[^;]+;base64,/, '');
       const filePath = path.join(DOWNLOADS_DIR, safeFilename);
       fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
-      res.json({ success: true, url: `/downloads/${safeFilename}`, filename: safeFilename });
+      res.json({ 
+        success: true, 
+        url: `/downloads/${safeFilename}`, 
+        downloadUrl: `/api/download-file/${safeFilename}`,
+        filename: safeFilename 
+      });
     } catch (err) {
       console.error('Error saving download file:', err);
       res.status(500).json({ error: 'Failed to save download file' });
+    }
+  });
+
+  // Direct forced download route with attachment headers
+  app.get('/api/download-file/:filename', (req, res) => {
+    try {
+      const safeFilename = req.params.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = path.join(DOWNLOADS_DIR, safeFilename);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).send('Download file not found');
+      }
+      res.download(filePath, safeFilename);
+    } catch (err) {
+      console.error('Error serving download file:', err);
+      res.status(500).send('Error downloading file');
     }
   });
 

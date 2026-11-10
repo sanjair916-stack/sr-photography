@@ -11,7 +11,8 @@ import {
   FileText,
   CheckCircle,
   Copy,
-  AlertCircle
+  AlertCircle,
+  Save
 } from 'lucide-react';
 import { Quotation, StudioProfile } from '../types';
 import { QuotationSheetA4 } from './QuotationSheetA4';
@@ -24,6 +25,7 @@ interface QuotationPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialExportAction?: 'jpg' | 'pdf' | null;
+  onSaveQuotation?: (q: Quotation) => Promise<Quotation>;
 }
 
 export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
@@ -31,28 +33,44 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
   studioProfile,
   isOpen,
   onClose,
-  initialExportAction = null
+  initialExportAction = null,
+  onSaveQuotation
 }) => {
   const [scale, setScale] = useState(0.85);
   const [isExporting, setIsExporting] = useState(false);
   const [exportType, setExportType] = useState<'pdf' | 'jpg' | null>(null);
   const [exportStatus, setExportStatus] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
   const [exportedJpg, setExportedJpg] = useState<{
     dataUrl: string;
     serverUrl?: string;
+    downloadUrl?: string;
+    filename: string;
+  } | null>(null);
+  const [exportedPdf, setExportedPdf] = useState<{
+    serverUrl?: string;
+    downloadUrl?: string;
     filename: string;
   } | null>(null);
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const printContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-trigger JPG generation if modal was opened via "Download JPG"
+  // Auto-trigger export if modal was opened with a direct export intent
   useEffect(() => {
-    if (isOpen && quotation && initialExportAction === 'jpg') {
-      const timer = setTimeout(() => {
-        handleDownloadJpg();
-      }, 300);
-      return () => clearTimeout(timer);
+    if (isOpen && quotation) {
+      if (initialExportAction === 'jpg') {
+        const timer = setTimeout(() => {
+          handleDownloadJpg();
+        }, 450);
+        return () => clearTimeout(timer);
+      } else if (initialExportAction === 'pdf') {
+        const timer = setTimeout(() => {
+          handleBrowserPrint();
+        }, 400);
+        return () => clearTimeout(timer);
+      }
     }
   }, [isOpen, quotation?.id, initialExportAction]);
 
@@ -62,9 +80,26 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
   const handleBrowserPrint = () => {
     try {
       window.print();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setModalError('Could not open browser print dialog.');
+      setModalError('Could not open browser print dialog: ' + (err?.message || 'Print error'));
+    }
+  };
+
+  // Save Quotation to database directly from inside the preview modal
+  const handleSaveModalQuotation = async () => {
+    if (!quotation || !onSaveQuotation) return;
+    try {
+      setIsSaving(true);
+      setModalError(null);
+      const saved = await onSaveQuotation(quotation);
+      setSaveSuccessMsg(`✓ Quotation ${saved.id} successfully saved to database!`);
+      setTimeout(() => setSaveSuccessMsg(''), 5000);
+    } catch (err: any) {
+      console.error(err);
+      setModalError(`Failed to save quotation to database: ${err?.message || 'Network error'}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -91,12 +126,20 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
       setExportType('pdf');
       await new Promise((r) => requestAnimationFrame(r));
 
-      await generateAndDownloadPdf({
+      const result = await generateAndDownloadPdf({
         element: el,
         quotationId: quotation.id,
         customerName: quotation.customer.name,
         onProgress: (status) => setExportStatus(status)
       });
+
+      if (result) {
+        setExportedPdf({
+          serverUrl: result.serverUrl,
+          downloadUrl: result.downloadUrl,
+          filename: result.filename
+        });
+      }
     } catch (err: any) {
       console.error(err);
       setModalError(`PDF export encountered an issue: ${err?.message || 'Rendering error'}. Please use the "Save as PDF (Print)" button to print/save directly.`);
@@ -146,6 +189,7 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
         setExportedJpg({
           dataUrl: result.dataUrl,
           serverUrl: result.serverUrl,
+          downloadUrl: result.downloadUrl,
           filename: result.filename
         });
       }
@@ -220,20 +264,20 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/85 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto modal-print-container">
       <div className="relative bg-stone-900 border border-stone-700/80 rounded-2xl w-full max-w-5xl h-[94vh] flex flex-col shadow-2xl modal-print-content">
         {/* Modal Top Bar */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-stone-900 border-b border-stone-800 text-white shrink-0 no-print">
-          <div className="flex items-center gap-3">
-            <span className="font-brand font-bold text-amber-400 text-sm tracking-wider">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-stone-900 border-b border-stone-800 text-white shrink-0 no-print">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="font-brand font-bold text-amber-400 text-xs sm:text-sm tracking-wider">
               A4 QUOTATION PREVIEW
             </span>
-            <span className="font-mono text-xs text-stone-400">
+            <span className="font-mono text-[11px] sm:text-xs text-stone-400">
               #{quotation.id} · {quotation.customer.name || 'Draft Quotation'}
             </span>
           </div>
 
           {/* Action Toolbar */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Zoom Controls */}
-            <div className="hidden sm:flex items-center gap-1 bg-stone-800/90 rounded-lg p-1 border border-stone-700/50 mr-2">
+            <div className="hidden sm:flex items-center gap-1 bg-stone-800/90 rounded-lg p-1 border border-stone-700/50 mr-1">
               <button
                 onClick={() => setScale(Math.max(0.5, scale - 0.1))}
                 title="Zoom Out"
@@ -260,30 +304,38 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
               </button>
             </div>
 
+            {/* Save to Database (if onSaveQuotation provided) */}
+            {onSaveQuotation && (
+              <button
+                onClick={handleSaveModalQuotation}
+                disabled={isSaving}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                title="Save quotation to persistent database"
+              >
+                {isSaving ? (
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                <span>Save</span>
+              </button>
+            )}
+
             {/* Primary Action: Direct Browser Print / Save as PDF */}
             <button
               onClick={handleBrowserPrint}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-600 text-stone-950 font-bold text-xs uppercase tracking-wider rounded-lg shadow-md transition-all cursor-pointer active:scale-95"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-600 text-stone-950 font-bold text-xs uppercase tracking-wider rounded-lg shadow-md transition-all cursor-pointer active:scale-95"
               title="Open browser print dialog to save as authentic PDF"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Save as PDF (Print)</span>
             </button>
 
-            {/* WhatsApp Share */}
-            <button
-              onClick={handleWhatsApp}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>WhatsApp</span>
-            </button>
-
             {/* Download JPG Button */}
             <button
               onClick={handleDownloadJpg}
               disabled={isExporting}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-lg transition-colors cursor-pointer disabled:opacity-50 shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-lg transition-colors cursor-pointer disabled:opacity-50 shadow-sm"
               title="Generate and download A4 JPG image"
             >
               <ImageIcon className="w-3.5 h-3.5" />
@@ -303,6 +355,15 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
               <span>
                 {isExporting && exportType === 'pdf' ? exportStatus || 'Exporting PDF...' : 'File PDF'}
               </span>
+            </button>
+
+            {/* WhatsApp Share */}
+            <button
+              onClick={handleWhatsApp}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>WhatsApp</span>
             </button>
 
             <button
@@ -325,6 +386,22 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
             <button
               onClick={() => setModalError(null)}
               className="text-red-400 hover:text-white text-xs underline cursor-pointer ml-3"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Save Success Banner */}
+        {saveSuccessMsg && (
+          <div className="px-5 py-2.5 bg-emerald-950/80 border-b border-emerald-800/80 text-emerald-200 text-xs font-medium flex items-center justify-between no-print">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{saveSuccessMsg}</span>
+            </div>
+            <button
+              onClick={() => setSaveSuccessMsg('')}
+              className="text-emerald-400 hover:text-white text-xs underline cursor-pointer ml-3"
             >
               Dismiss
             </button>
@@ -360,7 +437,7 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
               onClick={handleDownloadJpg}
               className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer underline"
             >
-              Click here to Download JPG
+              Download JPG
             </button>
             <span className="text-stone-600">|</span>
             <button
@@ -412,20 +489,8 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
               {/* Primary Direct Download */}
               <a
-                href={exportedJpg.serverUrl || exportedJpg.dataUrl}
+                href={exportedJpg.downloadUrl || exportedJpg.serverUrl || exportedJpg.dataUrl}
                 download={exportedJpg.filename}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  const a = document.createElement('a');
-                  a.href = exportedJpg.dataUrl;
-                  a.download = exportedJpg.filename;
-                  document.body.appendChild(a);
-                  a.click();
-                  setTimeout(() => {
-                    if (document.body.contains(a)) document.body.removeChild(a);
-                  }, 1000);
-                }}
                 className="py-2.5 px-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-stone-950 font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer text-center"
               >
                 <Download className="w-4 h-4 shrink-0" />
@@ -453,6 +518,57 @@ export const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
                 className="text-amber-400 hover:text-amber-300 font-semibold underline cursor-pointer"
               >
                 Save as PDF (Print)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Export Success Dialog */}
+      {exportedPdf && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 no-print overflow-y-auto">
+          <div className="bg-stone-900 border border-amber-500/60 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl text-stone-100 space-y-4 my-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-800">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-brand font-bold text-white text-base">PDF Document Ready</h3>
+              </div>
+              <button
+                onClick={() => setExportedPdf(null)}
+                className="text-stone-400 hover:text-white p-1 rounded-lg hover:bg-stone-800 transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-stone-300 leading-relaxed">
+              Your A4 PDF document has been compiled. If your browser did not automatically save it to your downloads folder, click below:
+            </p>
+
+            <div className="flex flex-col gap-2.5 pt-1">
+              <a
+                href={exportedPdf.downloadUrl || exportedPdf.serverUrl || '#'}
+                download={exportedPdf.filename}
+                onClick={() => {
+                  setExportedPdf(null);
+                }}
+                className="py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-stone-950 font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer text-center"
+              >
+                <Download className="w-4 h-4 shrink-0" />
+                <span>Download PDF File ({exportedPdf.filename})</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setExportedPdf(null);
+                  handleBrowserPrint();
+                }}
+                className="py-2.5 px-4 bg-stone-800 hover:bg-stone-700 text-stone-200 font-semibold text-xs rounded-lg flex items-center justify-center gap-2 border border-stone-700 cursor-pointer transition-colors"
+              >
+                <Printer className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Or Open Browser Print / Save as PDF</span>
               </button>
             </div>
           </div>
